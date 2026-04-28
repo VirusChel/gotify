@@ -1,7 +1,7 @@
 {
   "name": "gotify-backend",
   "version": "1.0.0",
-  "description": "GoTify backend with file uploads",
+  "description": "GoTify server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
