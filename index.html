@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>GoTify — музыкальное сообщество (мобилка + ПК)</title>
+    <title>GoTify — музыкальное сообщество</title>
     <style>
         * {
             margin: 0;
@@ -11,7 +11,6 @@
             box-sizing: border-box;
         }
 
-        /* ---------- Базовые переменные (тема по умолчанию: изумруд) ---------- */
         :root {
             --bg-gradient-start: #0a1f1a;
             --bg-gradient-end: #07120e;
@@ -24,9 +23,9 @@
             --sidebar-bg: rgba(6, 18, 14, 0.95);
             --border-light: rgba(29, 185, 84, 0.25);
             --shadow: 0 12px 28px rgba(0,0,0,0.5);
+            --search-bg: rgba(0, 0, 0, 0.3);
         }
 
-        /* темы (оставляем как есть) */
         body.theme-snow {
             --bg-gradient-start: #e8ecf2;
             --bg-gradient-end: #d0d9e6;
@@ -38,6 +37,7 @@
             --text-secondary: #2c3e50;
             --sidebar-bg: rgba(255,255,255,0.95);
             --border-light: #2c7da080;
+            --search-bg: rgba(0, 0, 0, 0.2);
         }
         body.theme-blood {
             --bg-gradient-start: #2b0b0f;
@@ -50,6 +50,7 @@
             --text-secondary: #e0b4bb;
             --sidebar-bg: rgba(40, 10, 14, 0.95);
             --border-light: #e6394680;
+            --search-bg: rgba(0, 0, 0, 0.4);
         }
         body.theme-sun {
             --bg-gradient-start: #382008;
@@ -62,6 +63,7 @@
             --text-secondary: #f7d9b5;
             --sidebar-bg: rgba(45, 30, 12, 0.95);
             --border-light: #f4a26180;
+            --search-bg: rgba(0, 0, 0, 0.4);
         }
         body.theme-night {
             --bg-gradient-start: #1e1a3a;
@@ -74,29 +76,28 @@
             --text-secondary: #cdc4ff;
             --sidebar-bg: rgba(20, 16, 48, 0.95);
             --border-light: #c084fc80;
+            --search-bg: rgba(0, 0, 0, 0.4);
         }
 
         body {
             background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
             color: var(--text-primary);
-            font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
             height: 100vh;
             overflow: hidden;
-            transition: background 0.3s ease, color 0.2s;
+            transition: background 0.3s, color 0.2s;
         }
 
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
         ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 10px; }
 
-        /* --- АДАПТИВНАЯ СТРУКТУРА --- */
         .app {
             display: flex;
             flex-direction: column;
             height: 100%;
         }
 
-        /* Десктоп: ряд */
         .main-row {
             display: flex;
             flex: 1;
@@ -104,7 +105,6 @@
             position: relative;
         }
 
-        /* Сайдбар (десктоп) */
         .sidebar {
             width: 280px;
             background: var(--sidebar-bg);
@@ -113,13 +113,12 @@
             padding: 24px 18px;
             display: flex;
             flex-direction: column;
-            gap: 28px;
+            gap: 20px;
             overflow-y: auto;
-            transition: transform 0.3s ease;
+            transition: transform 0.3s;
             z-index: 10;
         }
 
-        /* Мобильная версия: сайдбар скрыт, появляется по кнопке */
         .mobile-menu-btn {
             display: none;
             position: fixed;
@@ -137,6 +136,10 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             align-items: center;
             justify-content: center;
+            transition: transform 0.2s ease;
+        }
+        .mobile-menu-btn:hover {
+            transform: scale(1.05);
         }
 
         .sidebar-mobile-overlay {
@@ -151,18 +154,14 @@
             backdrop-filter: blur(4px);
         }
 
-        /* Основной контент */
         .content {
             flex: 1;
             overflow-y: auto;
             padding: 20px 24px;
         }
 
-        /* Мобильные настройки */
         @media (max-width: 768px) {
-            .mobile-menu-btn {
-                display: flex;
-            }
+            .mobile-menu-btn { display: flex; }
             .sidebar {
                 position: fixed;
                 top: 0;
@@ -170,66 +169,21 @@
                 height: 100%;
                 transform: translateX(-100%);
                 width: 260px;
-                z-index: 20;
-                border-right: none;
                 border-radius: 0 20px 20px 0;
-                background: var(--sidebar-bg);
-                backdrop-filter: blur(24px);
             }
-            .sidebar.open {
-                transform: translateX(0);
-            }
-            .sidebar-mobile-overlay.open {
-                display: block;
-            }
-            .content {
-                padding: 70px 16px 20px 16px;
-                margin-top: 0;
-            }
-            .tracks-grid {
-                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-                gap: 16px;
-            }
-            .player-bar {
-                padding: 8px 12px;
-                gap: 8px;
-                flex-wrap: wrap;
-            }
-            .player-info {
-                width: 140px;
-                font-size: 12px;
-            }
-            .control-buttons {
-                gap: 8px;
-            }
-            .ctrl-btn {
-                font-size: 20px;
-            }
-            .play-pause {
-                width: 40px;
-                height: 40px;
-                font-size: 18px;
-            }
-            .progress-area {
-                order: 1;
-                width: 100%;
-                margin-top: 6px;
-            }
-            .volume-control {
-                width: 100px;
-            }
-            .track-card {
-                padding: 12px;
-            }
-            .track-cover {
-                font-size: 36px;
-            }
-            .greeting {
-                font-size: 26px;
-            }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-mobile-overlay.open { display: block; }
+            .content { padding: 70px 16px 20px; }
+            .tracks-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+            .player-bar { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
+            .player-info { width: 140px; }
+            .control-buttons { gap: 8px; }
+            .ctrl-btn { font-size: 20px; }
+            .play-pause { width: 40px; height: 40px; font-size: 18px; }
+            .progress-area { order: 1; width: 100%; margin-top: 6px; }
+            .volume-control { width: 100px; }
         }
 
-        /* Остальные стили (карточки, плеер, about — без изменений, только адаптивные сетки) */
         .logo {
             font-size: 30px;
             font-weight: 800;
@@ -237,9 +191,6 @@
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
         .nav-item {
@@ -249,7 +200,6 @@
             padding: 12px 14px;
             border-radius: 14px;
             cursor: pointer;
-            transition: all 0.2s;
             color: var(--text-secondary);
             font-weight: 500;
             background: transparent;
@@ -257,12 +207,42 @@
             width: 100%;
             text-align: left;
             font-size: 16px;
+            transition: all 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
         }
-
         .nav-item:hover, .nav-item.active {
             background: rgba(255,255,255,0.08);
             color: var(--text-primary);
             transform: translateX(5px);
+        }
+
+        /* Поиск в стиле темы */
+        .search-container {
+            background: var(--search-bg);
+            backdrop-filter: blur(8px);
+            border-radius: 60px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 32px;
+            border: 1px solid var(--border-light);
+            transition: all 0.2s ease;
+        }
+        .search-container:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(29,185,84,0.2);
+        }
+        .search-container input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            width: 100%;
+            outline: none;
+            font-size: 15px;
+        }
+        .search-container input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.7;
         }
 
         .tracks-grid {
@@ -270,25 +250,22 @@
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 24px;
         }
-
         .track-card {
             background: var(--card-bg);
             backdrop-filter: blur(4px);
             border-radius: 24px;
             padding: 18px;
             cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+            transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1), background 0.2s ease, border-color 0.2s ease;
             border: 1px solid rgba(255,255,255,0.04);
             position: relative;
         }
-
         .track-card:hover {
             transform: translateY(-8px);
             background: var(--card-hover);
             border-color: var(--accent);
             box-shadow: var(--shadow);
         }
-
         .track-cover {
             background: rgba(0,0,0,0.3);
             border-radius: 20px;
@@ -299,7 +276,6 @@
             font-size: 48px;
             margin-bottom: 16px;
         }
-
         .track-name {
             font-weight: 700;
             font-size: 16px;
@@ -307,7 +283,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-
         .track-artist {
             font-size: 13px;
             color: var(--text-secondary);
@@ -315,14 +290,12 @@
             display: flex;
             justify-content: space-between;
         }
-
         .play-count {
             font-size: 11px;
             background: rgba(0,0,0,0.5);
             padding: 2px 8px;
             border-radius: 30px;
         }
-
         .play-icon-badge {
             position: absolute;
             bottom: 18px;
@@ -335,11 +308,10 @@
             align-items: center;
             justify-content: center;
             opacity: 0;
-            transition: 0.2s;
+            transition: opacity 0.2s ease, transform 0.2s ease;
             font-size: 16px;
             color: black;
         }
-
         .track-card:hover .play-icon-badge {
             opacity: 1;
             transform: scale(1.05);
@@ -350,18 +322,23 @@
             padding: 60px 20px;
             background: rgba(0,0,0,0.3);
             border-radius: 36px;
+            margin: 40px auto;
+            max-width: 500px;
         }
-
         .upload-helper {
             display: inline-block;
             background: var(--accent);
             color: black;
-            padding: 10px 24px;
+            padding: 12px 28px;
             border-radius: 60px;
-            margin-top: 20px;
+            margin-top: 32px;
             font-weight: bold;
             cursor: pointer;
-            transition: 0.2s;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+        .upload-helper:hover {
+            transform: scale(1.02);
+            background: var(--accent-glow);
         }
 
         .player-bar {
@@ -375,103 +352,45 @@
             gap: 16px;
             flex-wrap: wrap;
         }
-
-        .player-info {
-            width: 220px;
-            overflow: hidden;
-        }
-
-        .track-title {
-            font-weight: 600;
-            font-size: 14px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .control-buttons {
-            display: flex;
-            gap: 16px;
-            align-items: center;
-        }
-
+        .player-info { width: 220px; overflow: hidden; }
+        .track-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .control-buttons { display: flex; gap: 16px; align-items: center; }
         .ctrl-btn {
             background: none;
             border: none;
             font-size: 26px;
             cursor: pointer;
             color: var(--text-secondary);
-            transition: 0.1s;
             padding: 8px;
+            transition: transform 0.15s ease, color 0.15s ease;
         }
-
         .ctrl-btn:hover {
             color: var(--accent);
             transform: scale(1.08);
         }
-
         .play-pause {
             background: var(--accent);
             color: black;
             width: 48px;
             height: 48px;
             border-radius: 50%;
-            font-size: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: transform 0.15s ease, background 0.15s ease;
         }
+        .play-pause:hover {
+            transform: scale(1.05);
+            background: var(--accent-glow);
+        }
+        .progress-area { display: flex; align-items: center; gap: 12px; flex: 2; min-width: 150px; }
+        .progress-bar { flex: 1; height: 5px; background: rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer; }
+        .progress-fill { width: 0%; height: 100%; background: var(--accent); border-radius: 10px; }
+        .volume-control { width: 120px; display: flex; gap: 8px; align-items: center; }
+        .volume-slider { width: 80px; cursor: pointer; }
 
-        .progress-area {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 2;
-            min-width: 150px;
-        }
-
-        .progress-bar {
-            flex: 1;
-            height: 5px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 10px;
-            cursor: pointer;
-        }
-
-        .progress-fill {
-            width: 0%;
-            height: 100%;
-            background: var(--accent);
-            border-radius: 10px;
-        }
-
-        .volume-control {
-            width: 120px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .volume-slider {
-            width: 80px;
-        }
-
-        .about-container {
-            max-width: 700px;
-            margin: 0 auto;
-            text-align: center;
-            background: rgba(0,0,0,0.3);
-            backdrop-filter: blur(12px);
-            border-radius: 48px;
-            padding: 48px 32px;
-        }
-        .social-links {
-            display: flex;
-            justify-content: center;
-            gap: 28px;
-            margin: 32px 0 20px;
-            flex-wrap: wrap;
-        }
+        .about-container { max-width: 700px; margin: 0 auto; text-align: center; background: rgba(0,0,0,0.3); border-radius: 48px; padding: 48px 32px; }
+        .social-links { display: flex; justify-content: center; gap: 28px; margin: 32px 0 20px; flex-wrap: wrap; }
         .social-btn {
             background: var(--card-bg);
             padding: 12px 24px;
@@ -479,20 +398,16 @@
             text-decoration: none;
             color: var(--text-primary);
             font-weight: 600;
-            transition: 0.2s;
             display: inline-flex;
             align-items: center;
             gap: 10px;
             border: 1px solid var(--border-light);
+            transition: transform 0.2s ease, background 0.2s ease;
         }
         .social-btn:hover {
             background: var(--accent);
             color: black;
             transform: scale(1.02);
-        }
-
-        button, .nav-item, .play-icon-badge, .upload-helper {
-            -webkit-tap-highlight-color: transparent;
         }
     </style>
 </head>
@@ -515,12 +430,10 @@
                 </div>
             </div>
         </div>
-
         <div class="content" id="contentArea">
             <div id="dynamicContent"></div>
         </div>
     </div>
-
     <div class="player-bar">
         <div class="player-info">
             <div class="track-title" id="currentTrackName">🎧 нет трека</div>
@@ -544,121 +457,186 @@
 </div>
 
 <script>
-    // ---------- ПОЛНОСТЬЮ РАБОЧАЯ ЛОГИКА (base64, сообщество, плейлисты, темы, about) ----------
-    let allTracks = [];
-    let playlists = [];
-    let communityTracks = [];
-    let currentUserId = "user_" + (localStorage.getItem('gotify_user_id') || Math.random().toString(36).substr(2, 6));
-    localStorage.setItem('gotify_user_id', currentUserId);
+    // IndexedDB сохранение (без лимитов)
+    const DB_NAME = 'GoTifyDB';
+    const DB_VERSION = 1;
+    let db = null;
 
-    let audio = new Audio();
-    let currentCommunityTrackId = null;
-    let currentPlaylistId = null;
-    let isPlaying = false;
-
-    function fileToBase64(file) {
+    function openDB() {
         return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                db = request.result;
+                resolve(db);
+            };
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('tracks')) {
+                    const store = db.createObjectStore('tracks', { keyPath: 'id' });
+                    store.createIndex('by_date', 'date');
+                    store.createIndex('by_plays', 'plays');
+                }
+                if (!db.objectStoreNames.contains('playlists')) {
+                    db.createObjectStore('playlists', { keyPath: 'id' });
+                }
+            };
         });
     }
 
-    async function uploadToCommunity(file, customArtist = null) {
-        const fileName = file.name.replace(/\.[^/.]+$/, '');
-        const artist = customArtist || prompt("Исполнитель (помоги другим найти трек):", "Неизвестный") || "Неизвестный";
-        const base64 = await fileToBase64(file);
-        const newTrack = {
-            id: generateId(),
-            name: fileName,
-            artist: artist,
-            plays: 0,
-            uploadedBy: currentUserId,
-            base64: base64,
-            date: Date.now()
-        };
-        communityTracks.unshift(newTrack);
-        saveCommunity();
+    async function addTrackToDB(track) {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(['tracks'], 'readwrite');
+            const store = transaction.objectStore('tracks');
+            const request = store.add(track);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
 
-        const myPersonalTrack = { id: newTrack.id, name: fileName, artist: artist, base64: base64 };
-        allTracks.push(myPersonalTrack);
+    async function getAllTracks() {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(['tracks'], 'readonly');
+            const store = transaction.objectStore('tracks');
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function incrementPlaysDB(trackId) {
+        const track = await getTrackById(trackId);
+        if (track) {
+            track.plays = (track.plays || 0) + 1;
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['tracks'], 'readwrite');
+                const store = transaction.objectStore('tracks');
+                const request = store.put(track);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+    }
+
+    async function getTrackById(id) {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(['tracks'], 'readonly');
+            const store = transaction.objectStore('tracks');
+            const request = store.get(id);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function getPlaylists() {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(['playlists'], 'readonly');
+            const store = transaction.objectStore('playlists');
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function savePlaylists(playlists) {
+        const transaction = db.transaction(['playlists'], 'readwrite');
+        const store = transaction.objectStore('playlists');
+        store.clear();
+        for (const pl of playlists) store.add(pl);
+        return new Promise((resolve) => { transaction.oncomplete = resolve; });
+    }
+
+    let globalTracks = [];
+    let myLibrary = [];
+    let playlists = [];
+    let audio = new Audio();
+    let currentTrackId = null;
+    let isPlaying = false;
+
+    async function loadAllData() {
+        await openDB();
+        globalTracks = await getAllTracks();
+        myLibrary = [...globalTracks];
+        const storedPlaylists = await getPlaylists();
+        if (storedPlaylists.length === 0) {
+            playlists = [{ id: 'default_all', name: '📀 Все треки', trackIds: globalTracks.map(t => t.id) }];
+            await savePlaylists(playlists);
+        } else {
+            playlists = storedPlaylists;
+        }
+    }
+
+    async function uploadTrack(file, customArtist = null) {
+        const fileName = file.name.replace(/\.[^/.]+$/, '');
+        const artist = customArtist || prompt("Исполнитель:", "Неизвестный") || "Неизвестный";
+        const id = Date.now() + '-' + Math.random().toString(36).substr(2, 8);
+        const fileData = file;
+        const track = { id, name: fileName, artist, plays: 0, fileData, date: Date.now() };
+        await addTrackToDB(track);
+        globalTracks = await getAllTracks();
+        myLibrary = [...globalTracks];
         const allPlaylist = playlists.find(p => p.id === 'default_all');
-        if (allPlaylist) allPlaylist.trackIds.push(myPersonalTrack.id);
-        saveMyLibrary();
+        if (allPlaylist) {
+            allPlaylist.trackIds.push(id);
+            await savePlaylists(playlists);
+        }
         renderCurrentView();
     }
 
-    function playTrack(track, isCommunity = true) {
-        if (!track || !track.base64) {
-            alert("Файл не найден. Возможно, был удалён.");
+    async function playTrack(trackId) {
+        const track = globalTracks.find(t => t.id === trackId);
+        if (!track || !track.fileData) { alert("Трек недоступен"); return; }
+        const url = URL.createObjectURL(track.fileData);
+        if (currentTrackId === trackId && audio.src === url) {
+            audio.play();
+            isPlaying = true;
+            document.getElementById('playPauseBtn').innerHTML = '⏸';
             return;
         }
-        audio.src = track.base64;
+        audio.src = url;
         audio.load();
-        audio.play().catch(e => console.warn("Автовоспроизведение заблокировано", e));
+        audio.play().catch(e => console.warn);
         isPlaying = true;
         document.getElementById('playPauseBtn').innerHTML = '⏸';
         document.getElementById('currentTrackName').innerText = `${track.name} · ${track.artist}`;
-        if (isCommunity) {
-            currentCommunityTrackId = track.id;
-            document.getElementById('currentPlaylistName').innerText = `сообщество · ${(track.plays||0)+1} прослушиваний`;
-            incrementPlays(track.id);
-        } else {
-            currentCommunityTrackId = null;
-            document.getElementById('currentPlaylistName').innerText = 'моя библиотека';
-        }
-    }
-
-    function incrementPlays(trackId) {
-        const track = communityTracks.find(t => t.id === trackId);
-        if (track) {
-            track.plays = (track.plays || 0) + 1;
-            saveCommunity();
-        }
-    }
-
-    function getTopCommunityTracks(limit = 30) {
-        return [...communityTracks].sort((a,b) => (b.plays||0) - (a.plays||0)).slice(0, limit);
+        document.getElementById('currentPlaylistName').innerText = 'сообщество';
+        currentTrackId = trackId;
+        await incrementPlaysDB(trackId);
+        globalTracks = await getAllTracks();
+        renderCurrentView();
     }
 
     function renderHome() {
+        const sorted = [...globalTracks].sort((a,b) => (b.plays||0) - (a.plays||0));
         const container = document.getElementById('dynamicContent');
-        if (!communityTracks.length) {
-            container.innerHTML = `<div class="empty-state">🎶 Сообщество пусто. Загрузи первый трек!<div class="upload-helper" id="emptyUploadBtn">📤 Загрузить песню</div></div>`;
+        if (!sorted.length) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    🎶 Сообщество пусто. Загрузи первый трек!
+                    <div class="upload-helper" id="emptyUploadBtn">📤 Загрузить песню</div>
+                </div>`;
             document.getElementById('emptyUploadBtn')?.addEventListener('click', () => document.getElementById('uploadInput').click());
             return;
         }
-        const sorted = [...communityTracks].sort((a,b) => (b.plays||0) - (a.plays||0));
-        container.innerHTML = `
-            <div class="greeting">🔥 Что слушают другие</div>
-            <div class="tracks-grid">
-                ${sorted.map(track => `
-                    <div class="track-card" data-id="${track.id}" data-type="community">
-                        <div class="track-cover">🎵</div>
-                        <div class="track-name">${escapeHtml(track.name)}</div>
-                        <div class="track-artist">${escapeHtml(track.artist)} <span class="play-count">▶️ ${track.plays || 0}</span></div>
-                        <div class="play-icon-badge">▶</div>
-                    </div>
-                `).join('')}
+        container.innerHTML = `<div class="greeting">🔥 Что слушают другие</div><div class="tracks-grid">${sorted.map(t => `
+            <div class="track-card" data-id="${t.id}" data-type="global">
+                <div class="track-cover">🎵</div>
+                <div class="track-name">${escapeHtml(t.name)}</div>
+                <div class="track-artist">${escapeHtml(t.artist)} <span class="play-count">▶️ ${t.plays || 0}</span></div>
+                <div class="play-icon-badge">▶</div>
             </div>
-        `;
-        attachCommunityEvents();
+        `).join('')}</div>`;
+        attachGlobalEvents();
     }
 
-    function attachCommunityEvents() {
-        document.querySelectorAll('.track-card[data-type="community"]').forEach(card => {
-            card.addEventListener('click', () => {
-                const trackId = card.dataset.id;
-                const track = communityTracks.find(t => t.id === trackId);
-                if (track) playTrack(track, true);
-                else alert("Трек не найден");
-            });
+    function attachGlobalEvents() {
+        document.querySelectorAll('.track-card[data-type="global"]').forEach(card => {
+            card.addEventListener('click', () => playTrack(card.dataset.id));
         });
     }
 
     function renderSearch() {
-        const topTracks = getTopCommunityTracks(12);
+        const topTracks = [...globalTracks].sort((a,b)=> (b.plays||0)-(a.plays||0)).slice(0,12);
         const container = document.getElementById('dynamicContent');
         container.innerHTML = `
             <div class="search-container">
@@ -666,111 +644,86 @@
                 <input type="text" id="searchInputGlobal" placeholder="Найти трек или исполнителя...">
             </div>
             <div class="section-title" style="font-size:24px; margin:16px 0;">🏆 Самые популярные</div>
-            <div id="searchResultsArea" class="tracks-grid">
-                ${topTracks.map(track => `
-                    <div class="track-card" data-id="${track.id}" data-type="community">
-                        <div class="track-cover">🎧</div>
-                        <div class="track-name">${escapeHtml(track.name)}</div>
-                        <div class="track-artist">${escapeHtml(track.artist)} ⚡ ${track.plays || 0}</div>
-                        <div class="play-icon-badge">▶</div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-        attachCommunityEvents();
-        const searchInput = document.getElementById('searchInputGlobal');
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase().trim();
-            if (!query) { renderSearch(); return; }
-            const filtered = communityTracks.filter(t => t.name.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query));
-            const resultsDiv = document.getElementById('searchResultsArea');
-            if (filtered.length === 0) {
-                resultsDiv.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
-                    😔 Не удалось найти «${escapeHtml(query)}»<br>
-                    ✨ Помоги сообществу! Загрузи этот трек.<br>
-                    <div class="upload-helper" id="searchUploadBtn">📀 Загрузить "${escapeHtml(query)}"</div>
-                </div>`;
-                document.getElementById('searchUploadBtn')?.addEventListener('click', () => document.getElementById('uploadInput').click());
-                return;
-            }
-            resultsDiv.innerHTML = filtered.map(track => `
-                <div class="track-card" data-id="${track.id}" data-type="community">
-                    <div class="track-cover">🔊</div>
-                    <div class="track-name">${escapeHtml(track.name)}</div>
-                    <div class="track-artist">${escapeHtml(track.artist)} · 🎧 ${track.plays}</div>
+            <div id="searchResultsArea" class="tracks-grid">${topTracks.map(t => `
+                <div class="track-card" data-id="${t.id}" data-type="global">
+                    <div class="track-cover">🎧</div>
+                    <div class="track-name">${escapeHtml(t.name)}</div>
+                    <div class="track-artist">${escapeHtml(t.artist)} ⚡ ${t.plays || 0}</div>
                     <div class="play-icon-badge">▶</div>
                 </div>
-            `).join('');
-            attachCommunityEvents();
+            `).join('')}</div>
+        `;
+        attachGlobalEvents();
+        const searchInput = document.getElementById('searchInputGlobal');
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = globalTracks.filter(t => t.name.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query));
+            const resultsDiv = document.getElementById('searchResultsArea');
+            if (!filtered.length) {
+                resultsDiv.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">😔 Не удалось найти «${escapeHtml(query)}».<br><div class="upload-helper" id="searchUploadBtn">📀 Загрузить</div></div>`;
+                document.getElementById('searchUploadBtn')?.addEventListener('click', () => document.getElementById('uploadInput').click());
+            } else {
+                resultsDiv.innerHTML = filtered.map(t => `<div class="track-card" data-id="${t.id}" data-type="global">
+                    <div class="track-cover">🔊</div>
+                    <div class="track-name">${escapeHtml(t.name)}</div>
+                    <div class="track-artist">${escapeHtml(t.artist)} · 🎧 ${t.plays}</div>
+                    <div class="play-icon-badge">▶</div>
+                </div>`).join('');
+                attachGlobalEvents();
+            }
         });
     }
 
     function renderLibrary() {
-        const tracks = getTracksByPlaylist(currentPlaylistId || playlists[0]?.id);
         const container = document.getElementById('dynamicContent');
-        container.innerHTML = `<div class="greeting">📀 Мои треки</div>
-            <div class="tracks-grid">${tracks.map(t => `
-                <div class="track-card" data-id="${t.id}" data-type="mytrack">
+        container.innerHTML = `<div class="greeting">📀 Моя библиотека</div>
+            <div class="tracks-grid">${myLibrary.map(t => `
+                <div class="track-card" data-id="${t.id}" data-type="local">
                     <div class="track-cover">💿</div>
                     <div class="track-name">${escapeHtml(t.name)}</div>
                     <div class="track-artist">${escapeHtml(t.artist)}</div>
                     <div class="play-icon-badge">▶</div>
                 </div>
             `).join('')}</div>
-            <button id="createPlaylistBtnLib" style="background:var(--accent); margin-top:24px; padding:10px 20px; border-radius:40px; border:none; font-weight:bold;">➕ Новый плейлист</button>
+            <button id="createPlaylistBtnLib" style="background:var(--accent); margin-top:24px; padding:10px 20px; border-radius:40px; border:none; font-weight:bold; cursor:pointer; transition:transform 0.2s ease;">➕ Новый плейлист</button>
         `;
-        document.querySelectorAll('.track-card[data-type="mytrack"]').forEach(card => {
-            card.addEventListener('click', () => {
-                const id = card.dataset.id;
-                const track = allTracks.find(t => t.id === id);
-                if (track) playTrack(track, false);
+        document.querySelectorAll('.track-card[data-type="local"]').forEach(card => {
+            card.addEventListener('click', () => playTrack(card.dataset.id));
+        });
+        const btn = document.getElementById('createPlaylistBtnLib');
+        if (btn) {
+            btn.addEventListener('click', async () => {
+                const name = prompt("Название плейлиста");
+                if (name) {
+                    playlists.push({ id: Date.now() + '', name: name, trackIds: [] });
+                    await savePlaylists(playlists);
+                    renderLibrary();
+                }
             });
-        });
-        document.getElementById('createPlaylistBtnLib')?.addEventListener('click', () => {
-            const name = prompt("Название плейлиста");
-            if(name) { playlists.push({ id: generateId(), name: name, trackIds: [] }); saveMyLibrary(); renderLibrary(); }
-        });
-    }
-
-    function getTracksByPlaylist(plId) {
-        const pl = playlists.find(p => p.id === plId);
-        if (!pl) return [];
-        return pl.trackIds.map(id => allTracks.find(t => t.id === id)).filter(t => t);
-    }
-
-    function applyTheme(themeName) {
-        document.body.className = '';
-        if (themeName === 'emerald') document.body.classList.add('theme-emerald');
-        else if (themeName === 'snow') document.body.classList.add('theme-snow');
-        else if (themeName === 'blood') document.body.classList.add('theme-blood');
-        else if (themeName === 'sun') document.body.classList.add('theme-sun');
-        else if (themeName === 'night') document.body.classList.add('theme-night');
-        localStorage.setItem('gotify_theme', themeName);
+        }
     }
 
     function renderThemes() {
         const container = document.getElementById('dynamicContent');
-        container.innerHTML = `
-            <div class="greeting">🎨 Выбери свою атмосферу</div>
-            <div class="tracks-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px,1fr));">
-                <div class="track-card" data-theme="emerald"><div class="track-cover">🌿</div><div class="track-name">Изумруд</div></div>
-                <div class="track-card" data-theme="snow"><div class="track-cover">❄️</div><div class="track-name">Снег</div></div>
-                <div class="track-card" data-theme="blood"><div class="track-cover">🩸</div><div class="track-name">Кровь</div></div>
-                <div class="track-card" data-theme="sun"><div class="track-cover">☀️</div><div class="track-name">Солнце</div></div>
-                <div class="track-card" data-theme="night"><div class="track-cover">🌙</div><div class="track-name">Фиол. ночь</div></div>
-            </div>
-        `;
+        container.innerHTML = `<div class="greeting">🎨 Выбери тему</div><div class="tracks-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px,1fr));">
+            <div class="track-card" data-theme="emerald"><div class="track-cover">🌿</div><div class="track-name">Изумруд</div></div>
+            <div class="track-card" data-theme="snow"><div class="track-cover">❄️</div><div class="track-name">Снег</div></div>
+            <div class="track-card" data-theme="blood"><div class="track-cover">🩸</div><div class="track-name">Кровь</div></div>
+            <div class="track-card" data-theme="sun"><div class="track-cover">☀️</div><div class="track-name">Солнце</div></div>
+            <div class="track-card" data-theme="night"><div class="track-cover">🌙</div><div class="track-name">Фиол. ночь</div></div>
+        </div>`;
         document.querySelectorAll('.track-card[data-theme]').forEach(card => {
             card.addEventListener('click', () => {
-                applyTheme(card.dataset.theme);
+                const theme = card.dataset.theme;
+                document.body.className = `theme-${theme}`;
+                localStorage.setItem('gotify_theme', theme);
                 renderThemes();
             });
         });
     }
 
     function renderAbout() {
-        const container = document.getElementById('dynamicContent');
-        container.innerHTML = `
+        document.getElementById('dynamicContent').innerHTML = `
             <div class="about-container">
                 <div class="about-icon">🎧✨</div>
                 <h2 style="margin: 20px 0;">GoTify · Community Edition</h2>
@@ -786,12 +739,12 @@
     }
 
     function renderCurrentView() {
-        const activeNav = document.querySelector('.nav-item.active')?.dataset.nav;
-        if (activeNav === 'home') renderHome();
-        else if (activeNav === 'search') renderSearch();
-        else if (activeNav === 'library') renderLibrary();
-        else if (activeNav === 'themes') renderThemes();
-        else if (activeNav === 'about') renderAbout();
+        const active = document.querySelector('.nav-item.active')?.dataset.nav || 'home';
+        if (active === 'home') renderHome();
+        else if (active === 'search') renderSearch();
+        else if (active === 'library') renderLibrary();
+        else if (active === 'themes') renderThemes();
+        else if (active === 'about') renderAbout();
         else renderHome();
     }
 
@@ -800,82 +753,44 @@
         else { audio.pause(); isPlaying = false; document.getElementById('playPauseBtn').innerHTML = '▶'; }
     }
     function nextTrack() {
-        if (currentCommunityTrackId) {
-            const index = communityTracks.findIndex(t => t.id === currentCommunityTrackId);
-            if (index !== -1 && index+1 < communityTracks.length) playTrack(communityTracks[index+1], true);
-            else if (communityTracks.length) playTrack(communityTracks[0], true);
+        if (currentTrackId) {
+            const idx = globalTracks.findIndex(t => t.id === currentTrackId);
+            if (idx !== -1 && idx+1 < globalTracks.length) playTrack(globalTracks[idx+1].id);
+            else if (globalTracks.length) playTrack(globalTracks[0].id);
         }
     }
     function prevTrack() {
-        if (currentCommunityTrackId) {
-            const index = communityTracks.findIndex(t => t.id === currentCommunityTrackId);
-            if (index > 0) playTrack(communityTracks[index-1], true);
-            else if (communityTracks.length) playTrack(communityTracks[communityTracks.length-1], true);
+        if (currentTrackId) {
+            const idx = globalTracks.findIndex(t => t.id === currentTrackId);
+            if (idx > 0) playTrack(globalTracks[idx-1].id);
+            else if (globalTracks.length) playTrack(globalTracks[globalTracks.length-1].id);
         }
     }
 
-    function loadAllData() {
-        const storedCommunity = localStorage.getItem('gotify_community');
-        if (storedCommunity) communityTracks = JSON.parse(storedCommunity);
-        else communityTracks = [];
-        const storedMyTracks = localStorage.getItem('gotify_mytracks');
-        if (storedMyTracks) allTracks = JSON.parse(storedMyTracks);
-        const storedPlaylists = localStorage.getItem('gotify_playlists');
-        if (storedPlaylists) playlists = JSON.parse(storedPlaylists);
-        else playlists = [{ id: 'default_all', name: '🎵 Все треки', trackIds: [] }];
-    }
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadAllData();
+        const savedTheme = localStorage.getItem('gotify_theme') || 'emerald';
+        document.body.className = `theme-${savedTheme}`;
 
-    function saveCommunity() { localStorage.setItem('gotify_community', JSON.stringify(communityTracks)); }
-    function saveMyLibrary() {
-        localStorage.setItem('gotify_mytracks', JSON.stringify(allTracks));
-        localStorage.setItem('gotify_playlists', JSON.stringify(playlists));
-    }
-
-    function generateId() { return Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
-
-    // Мобильное меню
-    function initMobileMenu() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const menuBtn = document.getElementById('mobileMenuBtn');
-        function closeMenu() {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('open');
-        }
-        function openMenu() {
-            sidebar.classList.add('open');
-            overlay.classList.add('open');
-        }
-        menuBtn.addEventListener('click', openMenu);
-        overlay.addEventListener('click', closeMenu);
-        document.querySelectorAll('.nav-item').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (window.innerWidth <= 768) closeMenu();
-            });
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        loadAllData();
-        const savedTheme = localStorage.getItem('gotify_theme') || 'emerald';
-        applyTheme(savedTheme);
-        initMobileMenu();
-
+        menuBtn.addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('open'); });
+        overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); });
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
                 btn.classList.add('active');
                 renderCurrentView();
+                if (window.innerWidth <= 768) { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
             });
         });
 
         document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('uploadInput').click());
         document.getElementById('uploadInput').addEventListener('change', async (e) => {
-            const files = Array.from(e.target.files);
-            for (const file of files) await uploadToCommunity(file, null);
+            for (let file of e.target.files) await uploadTrack(file, null);
             e.target.value = '';
-            if (document.querySelector('.nav-item.active')?.dataset.nav === 'home') renderHome();
-            else if (document.querySelector('.nav-item.active')?.dataset.nav === 'search') renderSearch();
+            renderCurrentView();
         });
 
         document.getElementById('playPauseBtn').onclick = playPause;
@@ -890,7 +805,7 @@
         });
         audio.addEventListener('timeupdate', () => {
             if (audio.duration) {
-                document.getElementById('progressFill').style.width = (audio.currentTime/audio.duration*100)+'%';
+                document.getElementById('progressFill').style.width = (audio.currentTime / audio.duration * 100) + '%';
                 document.getElementById('currentTime').innerText = formatTime(audio.currentTime);
                 document.getElementById('totalTime').innerText = formatTime(audio.duration);
             }
@@ -901,8 +816,8 @@
         renderCurrentView();
     });
 
-    function formatTime(sec) { if(isNaN(sec)) return '0:00'; const m = Math.floor(sec/60); const s = Math.floor(sec%60); return `${m}:${s<10?'0'+s:s}`; }
-    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+    function formatTime(s) { if (isNaN(s)) return '0:00'; const m = Math.floor(s/60); const sec = Math.floor(s%60); return `${m}:${sec<10?'0'+sec:sec}`; }
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
 </script>
 </body>
 </html>
