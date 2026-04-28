@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>GoTify — музыкальное сообщество</title>
+    <title>GoTify — музыка сообщество (сохранение)</title>
     <style>
         * {
             margin: 0;
@@ -115,8 +115,8 @@
             flex-direction: column;
             gap: 20px;
             overflow-y: auto;
-            transition: transform 0.3s;
-            z-index: 10;
+            transition: transform 0.3s ease;
+            z-index: 20;
         }
 
         .mobile-menu-btn {
@@ -124,7 +124,7 @@
             position: fixed;
             top: 16px;
             left: 16px;
-            z-index: 20;
+            z-index: 30;
             background: var(--accent);
             border: none;
             width: 48px;
@@ -170,6 +170,7 @@
                 transform: translateX(-100%);
                 width: 260px;
                 border-radius: 0 20px 20px 0;
+                z-index: 25;
             }
             .sidebar.open { transform: translateX(0); }
             .sidebar-mobile-overlay.open { display: block; }
@@ -215,7 +216,6 @@
             transform: translateX(5px);
         }
 
-        /* Поиск в стиле темы */
         .search-container {
             background: var(--search-bg);
             backdrop-filter: blur(8px);
@@ -431,7 +431,7 @@
             </div>
         </div>
         <div class="content" id="contentArea">
-            <div id="dynamicContent"></div>
+            <div id="dynamicContent">Загрузка...</div>
         </div>
     </div>
     <div class="player-bar">
@@ -457,9 +457,9 @@
 </div>
 
 <script>
-    // IndexedDB сохранение (без лимитов)
+    // ---------- IndexedDB ----------
     const DB_NAME = 'GoTifyDB';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2; // увеличил версию для обновления структуры
     let db = null;
 
     function openDB() {
@@ -485,20 +485,17 @@
     }
 
     async function addTrackToDB(track) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['tracks'], 'readwrite');
-            const store = transaction.objectStore('tracks');
-            const request = store.add(track);
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
+        const transaction = db.transaction(['tracks'], 'readwrite');
+        const store = transaction.objectStore('tracks');
+        await store.add(track);
+        return new Promise(resolve => { transaction.oncomplete = resolve; });
     }
 
     async function getAllTracks() {
+        const transaction = db.transaction(['tracks'], 'readonly');
+        const store = transaction.objectStore('tracks');
+        const request = store.getAll();
         return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['tracks'], 'readonly');
-            const store = transaction.objectStore('tracks');
-            const request = store.getAll();
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
@@ -508,31 +505,28 @@
         const track = await getTrackById(trackId);
         if (track) {
             track.plays = (track.plays || 0) + 1;
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(['tracks'], 'readwrite');
-                const store = transaction.objectStore('tracks');
-                const request = store.put(track);
-                request.onsuccess = () => resolve();
-                request.onerror = () => reject(request.error);
-            });
+            const transaction = db.transaction(['tracks'], 'readwrite');
+            const store = transaction.objectStore('tracks');
+            await store.put(track);
+            return new Promise(resolve => { transaction.oncomplete = resolve; });
         }
     }
 
     async function getTrackById(id) {
+        const transaction = db.transaction(['tracks'], 'readonly');
+        const store = transaction.objectStore('tracks');
+        const request = store.get(id);
         return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['tracks'], 'readonly');
-            const store = transaction.objectStore('tracks');
-            const request = store.get(id);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
     }
 
     async function getPlaylists() {
+        const transaction = db.transaction(['playlists'], 'readonly');
+        const store = transaction.objectStore('playlists');
+        const request = store.getAll();
         return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['playlists'], 'readonly');
-            const store = transaction.objectStore('playlists');
-            const request = store.getAll();
             request.onsuccess = () => resolve(request.result || []);
             request.onerror = () => reject(request.error);
         });
@@ -543,36 +537,48 @@
         const store = transaction.objectStore('playlists');
         store.clear();
         for (const pl of playlists) store.add(pl);
-        return new Promise((resolve) => { transaction.oncomplete = resolve; });
+        return new Promise(resolve => { transaction.oncomplete = resolve; });
     }
 
+    // --- Глобальные переменные ---
     let globalTracks = [];
     let myLibrary = [];
     let playlists = [];
     let audio = new Audio();
     let currentTrackId = null;
     let isPlaying = false;
+    let isLoading = true; // флаг загрузки
 
-    async function loadAllData() {
-        await openDB();
-        globalTracks = await getAllTracks();
-        myLibrary = [...globalTracks];
-        const storedPlaylists = await getPlaylists();
-        if (storedPlaylists.length === 0) {
-            playlists = [{ id: 'default_all', name: '📀 Все треки', trackIds: globalTracks.map(t => t.id) }];
-            await savePlaylists(playlists);
-        } else {
-            playlists = storedPlaylists;
+    // Инициализация: открываем БД, загружаем треки, рендерим
+    async function initDBAndRender() {
+        try {
+            await openDB();
+            globalTracks = await getAllTracks();
+            myLibrary = [...globalTracks];
+            const storedPlaylists = await getPlaylists();
+            if (storedPlaylists.length === 0) {
+                playlists = [{ id: 'default_all', name: '📀 Все треки', trackIds: globalTracks.map(t => t.id) }];
+                await savePlaylists(playlists);
+            } else {
+                playlists = storedPlaylists;
+            }
+            isLoading = false;
+            renderCurrentView(); // рендерим после загрузки
+        } catch (e) {
+            console.error('Ошибка загрузки БД', e);
+            document.getElementById('dynamicContent').innerHTML = '<div class="empty-state">Ошибка загрузки данных. Попробуйте перезагрузить страницу.</div>';
         }
     }
 
     async function uploadTrack(file, customArtist = null) {
+        if (isLoading) return;
         const fileName = file.name.replace(/\.[^/.]+$/, '');
         const artist = customArtist || prompt("Исполнитель:", "Неизвестный") || "Неизвестный";
         const id = Date.now() + '-' + Math.random().toString(36).substr(2, 8);
         const fileData = file;
         const track = { id, name: fileName, artist, plays: 0, fileData, date: Date.now() };
         await addTrackToDB(track);
+        // Обновляем кэш
         globalTracks = await getAllTracks();
         myLibrary = [...globalTracks];
         const allPlaylist = playlists.find(p => p.id === 'default_all');
@@ -602,7 +608,9 @@
         document.getElementById('currentPlaylistName').innerText = 'сообщество';
         currentTrackId = trackId;
         await incrementPlaysDB(trackId);
+        // Обновляем счетчики в списке
         globalTracks = await getAllTracks();
+        myLibrary = [...globalTracks];
         renderCurrentView();
     }
 
@@ -739,6 +747,10 @@
     }
 
     function renderCurrentView() {
+        if (isLoading) {
+            document.getElementById('dynamicContent').innerHTML = '<div class="empty-state">Загрузка...</div>';
+            return;
+        }
         const active = document.querySelector('.nav-item.active')?.dataset.nav || 'home';
         if (active === 'home') renderHome();
         else if (active === 'search') renderSearch();
@@ -767,25 +779,40 @@
         }
     }
 
+    // --- Мобильное меню с правильной работой ---
     document.addEventListener('DOMContentLoaded', async () => {
-        await loadAllData();
+        // загрузка темы
         const savedTheme = localStorage.getItem('gotify_theme') || 'emerald';
         document.body.className = `theme-${savedTheme}`;
 
+        // инициализация БД и данных
+        await initDBAndRender();
+
+        // мобильное меню
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const menuBtn = document.getElementById('mobileMenuBtn');
-        menuBtn.addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('open'); });
-        overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); });
+        function closeMenu() {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+        }
+        function openMenu() {
+            sidebar.classList.add('open');
+            overlay.classList.add('open');
+        }
+        menuBtn.addEventListener('click', openMenu);
+        overlay.addEventListener('click', closeMenu);
+        // закрываем при клике на пункт меню
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (window.innerWidth <= 768) closeMenu();
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
                 btn.classList.add('active');
                 renderCurrentView();
-                if (window.innerWidth <= 768) { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
             });
         });
 
+        // обработчики загрузки
         document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('uploadInput').click());
         document.getElementById('uploadInput').addEventListener('change', async (e) => {
             for (let file of e.target.files) await uploadTrack(file, null);
@@ -793,6 +820,7 @@
             renderCurrentView();
         });
 
+        // плеер
         document.getElementById('playPauseBtn').onclick = playPause;
         document.getElementById('nextBtn').onclick = nextTrack;
         document.getElementById('prevBtn').onclick = prevTrack;
@@ -813,7 +841,6 @@
         audio.addEventListener('ended', () => nextTrack());
         document.getElementById('volumeSlider').addEventListener('input', (e) => audio.volume = e.target.value);
         audio.volume = 0.7;
-        renderCurrentView();
     });
 
     function formatTime(s) { if (isNaN(s)) return '0:00'; const m = Math.floor(s/60); const sec = Math.floor(s%60); return `${m}:${sec<10?'0'+sec:sec}`; }
