@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>GoTify — музыка сообщество (сохранение)</title>
+    <title>GoTify — музыкальное сообщество (фикс сохранения)</title>
     <style>
         * {
             margin: 0;
@@ -457,11 +457,17 @@
 </div>
 
 <script>
-    // ---------- IndexedDB ----------
-    const DB_NAME = 'GoTifyDB';
-    const DB_VERSION = 2; // увеличил версию для обновления структуры
+    // ---------- НАДЁЖНАЯ РАБОТА С IndexedDB ----------
+    const DB_NAME = 'GoTifyV3';
+    const DB_VERSION = 1;
     let db = null;
+    let globalTracks = [];
+    let playlists = [];
+    let audio = new Audio();
+    let currentTrackId = null;
+    let isPlaying = false;
 
+    // Открыть / инициализировать базу
     function openDB() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -473,9 +479,7 @@
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
                 if (!db.objectStoreNames.contains('tracks')) {
-                    const store = db.createObjectStore('tracks', { keyPath: 'id' });
-                    store.createIndex('by_date', 'date');
-                    store.createIndex('by_plays', 'plays');
+                    db.createObjectStore('tracks', { keyPath: 'id' });
                 }
                 if (!db.objectStoreNames.contains('playlists')) {
                     db.createObjectStore('playlists', { keyPath: 'id' });
@@ -484,115 +488,91 @@
         });
     }
 
-    async function addTrackToDB(track) {
-        const transaction = db.transaction(['tracks'], 'readwrite');
-        const store = transaction.objectStore('tracks');
-        await store.add(track);
-        return new Promise(resolve => { transaction.oncomplete = resolve; });
-    }
-
-    async function getAllTracks() {
-        const transaction = db.transaction(['tracks'], 'readonly');
-        const store = transaction.objectStore('tracks');
-        const request = store.getAll();
+    // Сохранить трек в БД (возвращает Promise)
+    function saveTrackToDB(track) {
         return new Promise((resolve, reject) => {
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async function incrementPlaysDB(trackId) {
-        const track = await getTrackById(trackId);
-        if (track) {
-            track.plays = (track.plays || 0) + 1;
             const transaction = db.transaction(['tracks'], 'readwrite');
             const store = transaction.objectStore('tracks');
-            await store.put(track);
-            return new Promise(resolve => { transaction.oncomplete = resolve; });
-        }
-    }
-
-    async function getTrackById(id) {
-        const transaction = db.transaction(['tracks'], 'readonly');
-        const store = transaction.objectStore('tracks');
-        const request = store.get(id);
-        return new Promise((resolve, reject) => {
-            request.onsuccess = () => resolve(request.result);
+            const request = store.put(track); // put (добавляет или обновляет)
+            request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
         });
     }
 
-    async function getPlaylists() {
-        const transaction = db.transaction(['playlists'], 'readonly');
-        const store = transaction.objectStore('playlists');
-        const request = store.getAll();
+    // Получить все треки из БД
+    function loadAllTracksFromDB() {
         return new Promise((resolve, reject) => {
+            const transaction = db.transaction(['tracks'], 'readonly');
+            const store = transaction.objectStore('tracks');
+            const request = store.getAll();
             request.onsuccess = () => resolve(request.result || []);
             request.onerror = () => reject(request.error);
         });
     }
 
-    async function savePlaylists(playlists) {
-        const transaction = db.transaction(['playlists'], 'readwrite');
-        const store = transaction.objectStore('playlists');
-        store.clear();
-        for (const pl of playlists) store.add(pl);
-        return new Promise(resolve => { transaction.oncomplete = resolve; });
-    }
-
-    // --- Глобальные переменные ---
-    let globalTracks = [];
-    let myLibrary = [];
-    let playlists = [];
-    let audio = new Audio();
-    let currentTrackId = null;
-    let isPlaying = false;
-    let isLoading = true; // флаг загрузки
-
-    // Инициализация: открываем БД, загружаем треки, рендерим
-    async function initDBAndRender() {
-        try {
-            await openDB();
-            globalTracks = await getAllTracks();
-            myLibrary = [...globalTracks];
-            const storedPlaylists = await getPlaylists();
-            if (storedPlaylists.length === 0) {
-                playlists = [{ id: 'default_all', name: '📀 Все треки', trackIds: globalTracks.map(t => t.id) }];
-                await savePlaylists(playlists);
-            } else {
-                playlists = storedPlaylists;
-            }
-            isLoading = false;
-            renderCurrentView(); // рендерим после загрузки
-        } catch (e) {
-            console.error('Ошибка загрузки БД', e);
-            document.getElementById('dynamicContent').innerHTML = '<div class="empty-state">Ошибка загрузки данных. Попробуйте перезагрузить страницу.</div>';
-        }
-    }
-
-    async function uploadTrack(file, customArtist = null) {
-        if (isLoading) return;
-        const fileName = file.name.replace(/\.[^/.]+$/, '');
-        const artist = customArtist || prompt("Исполнитель:", "Неизвестный") || "Неизвестный";
-        const id = Date.now() + '-' + Math.random().toString(36).substr(2, 8);
-        const fileData = file;
-        const track = { id, name: fileName, artist, plays: 0, fileData, date: Date.now() };
-        await addTrackToDB(track);
-        // Обновляем кэш
-        globalTracks = await getAllTracks();
-        myLibrary = [...globalTracks];
-        const allPlaylist = playlists.find(p => p.id === 'default_all');
-        if (allPlaylist) {
-            allPlaylist.trackIds.push(id);
-            await savePlaylists(playlists);
-        }
-        renderCurrentView();
-    }
-
-    async function playTrack(trackId) {
+    // Увеличить счётчик прослушиваний
+    async function incrementPlays(trackId) {
         const track = globalTracks.find(t => t.id === trackId);
-        if (!track || !track.fileData) { alert("Трек недоступен"); return; }
-        const url = URL.createObjectURL(track.fileData);
+        if (track) {
+            track.plays = (track.plays || 0) + 1;
+            await saveTrackToDB(track);
+            const updatedTracks = await loadAllTracksFromDB();
+            globalTracks = updatedTracks;
+            renderCurrentView(); // обновить UI
+        }
+    }
+
+    // Загрузить файл и сохранить в БД
+    async function uploadTrack(file, customArtist = null) {
+        return new Promise(async (resolve, reject) => {
+            const fileName = file.name.replace(/\.[^/.]+$/, '');
+            const artist = customArtist || prompt("Исполнитель:", "Неизвестный") || "Неизвестный";
+            const id = Date.now() + '-' + Math.random().toString(36).substring(2, 10);
+
+            try {
+                // Читаем файл как ArrayBuffer для надёжного хранения в IndexedDB
+                const arrayBuffer = await file.arrayBuffer();
+                const track = {
+                    id: id,
+                    name: fileName,
+                    artist: artist,
+                    plays: 0,
+                    data: arrayBuffer,
+                    type: file.type,
+                    date: Date.now()
+                };
+                await saveTrackToDB(track);
+                // Обновить глобальный список
+                globalTracks = await loadAllTracksFromDB();
+                // Для удобства сохраним плейлисты (если нужно)
+                if (playlists.length === 0) {
+                    playlists = [{ id: 'default_all', name: '📀 Все треки', trackIds: [] }];
+                }
+                const allPlaylist = playlists.find(p => p.id === 'default_all');
+                if (allPlaylist && !allPlaylist.trackIds.includes(id)) {
+                    allPlaylist.trackIds.push(id);
+                    // Сохранить плейлисты в отдельном store
+                    const transaction = db.transaction(['playlists'], 'readwrite');
+                    const store = transaction.objectStore('playlists');
+                    await store.put(allPlaylist);
+                }
+                resolve();
+            } catch (err) {
+                console.error(err);
+                reject(err);
+            }
+        });
+    }
+
+    // Воспроизведение
+    function playTrack(trackId) {
+        const track = globalTracks.find(t => t.id === trackId);
+        if (!track || !track.data) {
+            alert("Трек недоступен");
+            return;
+        }
+        const blob = new Blob([track.data], { type: track.type || 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
         if (currentTrackId === trackId && audio.src === url) {
             audio.play();
             isPlaying = true;
@@ -601,19 +581,16 @@
         }
         audio.src = url;
         audio.load();
-        audio.play().catch(e => console.warn);
+        audio.play().catch(e => console.warn(e));
         isPlaying = true;
         document.getElementById('playPauseBtn').innerHTML = '⏸';
         document.getElementById('currentTrackName').innerText = `${track.name} · ${track.artist}`;
         document.getElementById('currentPlaylistName').innerText = 'сообщество';
         currentTrackId = trackId;
-        await incrementPlaysDB(trackId);
-        // Обновляем счетчики в списке
-        globalTracks = await getAllTracks();
-        myLibrary = [...globalTracks];
-        renderCurrentView();
+        incrementPlays(trackId);
     }
 
+    // ---------- UI ----------
     function renderHome() {
         const sorted = [...globalTracks].sort((a,b) => (b.plays||0) - (a.plays||0));
         const container = document.getElementById('dynamicContent');
@@ -627,18 +604,18 @@
             return;
         }
         container.innerHTML = `<div class="greeting">🔥 Что слушают другие</div><div class="tracks-grid">${sorted.map(t => `
-            <div class="track-card" data-id="${t.id}" data-type="global">
+            <div class="track-card" data-id="${t.id}">
                 <div class="track-cover">🎵</div>
                 <div class="track-name">${escapeHtml(t.name)}</div>
                 <div class="track-artist">${escapeHtml(t.artist)} <span class="play-count">▶️ ${t.plays || 0}</span></div>
                 <div class="play-icon-badge">▶</div>
             </div>
         `).join('')}</div>`;
-        attachGlobalEvents();
+        attachCardEvents();
     }
 
-    function attachGlobalEvents() {
-        document.querySelectorAll('.track-card[data-type="global"]').forEach(card => {
+    function attachCardEvents() {
+        document.querySelectorAll('.track-card').forEach(card => {
             card.addEventListener('click', () => playTrack(card.dataset.id));
         });
     }
@@ -653,7 +630,7 @@
             </div>
             <div class="section-title" style="font-size:24px; margin:16px 0;">🏆 Самые популярные</div>
             <div id="searchResultsArea" class="tracks-grid">${topTracks.map(t => `
-                <div class="track-card" data-id="${t.id}" data-type="global">
+                <div class="track-card" data-id="${t.id}">
                     <div class="track-cover">🎧</div>
                     <div class="track-name">${escapeHtml(t.name)}</div>
                     <div class="track-artist">${escapeHtml(t.artist)} ⚡ ${t.plays || 0}</div>
@@ -661,7 +638,7 @@
                 </div>
             `).join('')}</div>
         `;
-        attachGlobalEvents();
+        attachCardEvents();
         const searchInput = document.getElementById('searchInputGlobal');
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase();
@@ -671,44 +648,34 @@
                 resultsDiv.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">😔 Не удалось найти «${escapeHtml(query)}».<br><div class="upload-helper" id="searchUploadBtn">📀 Загрузить</div></div>`;
                 document.getElementById('searchUploadBtn')?.addEventListener('click', () => document.getElementById('uploadInput').click());
             } else {
-                resultsDiv.innerHTML = filtered.map(t => `<div class="track-card" data-id="${t.id}" data-type="global">
+                resultsDiv.innerHTML = filtered.map(t => `<div class="track-card" data-id="${t.id}">
                     <div class="track-cover">🔊</div>
                     <div class="track-name">${escapeHtml(t.name)}</div>
                     <div class="track-artist">${escapeHtml(t.artist)} · 🎧 ${t.plays}</div>
                     <div class="play-icon-badge">▶</div>
                 </div>`).join('');
-                attachGlobalEvents();
+                attachCardEvents();
             }
         });
     }
 
     function renderLibrary() {
         const container = document.getElementById('dynamicContent');
+        if (globalTracks.length === 0) {
+            container.innerHTML = `<div class="empty-state">📂 Нет треков. Загрузите музыку.</div>`;
+            return;
+        }
         container.innerHTML = `<div class="greeting">📀 Моя библиотека</div>
-            <div class="tracks-grid">${myLibrary.map(t => `
-                <div class="track-card" data-id="${t.id}" data-type="local">
+            <div class="tracks-grid">${globalTracks.map(t => `
+                <div class="track-card" data-id="${t.id}">
                     <div class="track-cover">💿</div>
                     <div class="track-name">${escapeHtml(t.name)}</div>
                     <div class="track-artist">${escapeHtml(t.artist)}</div>
                     <div class="play-icon-badge">▶</div>
                 </div>
             `).join('')}</div>
-            <button id="createPlaylistBtnLib" style="background:var(--accent); margin-top:24px; padding:10px 20px; border-radius:40px; border:none; font-weight:bold; cursor:pointer; transition:transform 0.2s ease;">➕ Новый плейлист</button>
         `;
-        document.querySelectorAll('.track-card[data-type="local"]').forEach(card => {
-            card.addEventListener('click', () => playTrack(card.dataset.id));
-        });
-        const btn = document.getElementById('createPlaylistBtnLib');
-        if (btn) {
-            btn.addEventListener('click', async () => {
-                const name = prompt("Название плейлиста");
-                if (name) {
-                    playlists.push({ id: Date.now() + '', name: name, trackIds: [] });
-                    await savePlaylists(playlists);
-                    renderLibrary();
-                }
-            });
-        }
+        attachCardEvents();
     }
 
     function renderThemes() {
@@ -747,10 +714,6 @@
     }
 
     function renderCurrentView() {
-        if (isLoading) {
-            document.getElementById('dynamicContent').innerHTML = '<div class="empty-state">Загрузка...</div>';
-            return;
-        }
         const active = document.querySelector('.nav-item.active')?.dataset.nav || 'home';
         if (active === 'home') renderHome();
         else if (active === 'search') renderSearch();
@@ -764,45 +727,67 @@
         if (audio.paused) { audio.play(); isPlaying = true; document.getElementById('playPauseBtn').innerHTML = '⏸'; }
         else { audio.pause(); isPlaying = false; document.getElementById('playPauseBtn').innerHTML = '▶'; }
     }
+
     function nextTrack() {
-        if (currentTrackId) {
+        if (currentTrackId && globalTracks.length > 0) {
             const idx = globalTracks.findIndex(t => t.id === currentTrackId);
-            if (idx !== -1 && idx+1 < globalTracks.length) playTrack(globalTracks[idx+1].id);
-            else if (globalTracks.length) playTrack(globalTracks[0].id);
-        }
-    }
-    function prevTrack() {
-        if (currentTrackId) {
-            const idx = globalTracks.findIndex(t => t.id === currentTrackId);
-            if (idx > 0) playTrack(globalTracks[idx-1].id);
-            else if (globalTracks.length) playTrack(globalTracks[globalTracks.length-1].id);
+            const nextIdx = (idx + 1) % globalTracks.length;
+            playTrack(globalTracks[nextIdx].id);
+        } else if (globalTracks.length) {
+            playTrack(globalTracks[0].id);
         }
     }
 
-    // --- Мобильное меню с правильной работой ---
+    function prevTrack() {
+        if (currentTrackId && globalTracks.length > 0) {
+            const idx = globalTracks.findIndex(t => t.id === currentTrackId);
+            const prevIdx = (idx - 1 + globalTracks.length) % globalTracks.length;
+            playTrack(globalTracks[prevIdx].id);
+        } else if (globalTracks.length) {
+            playTrack(globalTracks[0].id);
+        }
+    }
+
+    // --- Инициализация ---
     document.addEventListener('DOMContentLoaded', async () => {
-        // загрузка темы
         const savedTheme = localStorage.getItem('gotify_theme') || 'emerald';
         document.body.className = `theme-${savedTheme}`;
 
-        // инициализация БД и данных
-        await initDBAndRender();
+        // Открываем БД и загружаем треки
+        try {
+            await openDB();
+            globalTracks = await loadAllTracksFromDB();
+            // Загружаем плейлисты (просто для единообразия)
+            const trans = db.transaction(['playlists'], 'readonly');
+            const store = trans.objectStore('playlists');
+            const plRequest = store.getAll();
+            plRequest.onsuccess = () => {
+                const storedPlaylists = plRequest.result;
+                if (storedPlaylists.length === 0) {
+                    playlists = [{ id: 'default_all', name: '📀 Все треки', trackIds: globalTracks.map(t => t.id) }];
+                    const addTrans = db.transaction(['playlists'], 'readwrite');
+                    const addStore = addTrans.objectStore('playlists');
+                    addStore.put(playlists[0]);
+                } else {
+                    playlists = storedPlaylists;
+                }
+            };
+        } catch(e) {
+            console.error(e);
+            document.getElementById('dynamicContent').innerHTML = '<div class="empty-state">Ошибка загрузки базы данных</div>';
+        }
 
-        // мобильное меню
+        // Рендер
+        renderCurrentView();
+
+        // Мобильное меню
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const menuBtn = document.getElementById('mobileMenuBtn');
-        function closeMenu() {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('open');
-        }
-        function openMenu() {
-            sidebar.classList.add('open');
-            overlay.classList.add('open');
-        }
+        function closeMenu() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+        function openMenu() { sidebar.classList.add('open'); overlay.classList.add('open'); }
         menuBtn.addEventListener('click', openMenu);
         overlay.addEventListener('click', closeMenu);
-        // закрываем при клике на пункт меню
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (window.innerWidth <= 768) closeMenu();
@@ -812,15 +797,18 @@
             });
         });
 
-        // обработчики загрузки
+        // Загрузка файлов
         document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('uploadInput').click());
         document.getElementById('uploadInput').addEventListener('change', async (e) => {
-            for (let file of e.target.files) await uploadTrack(file, null);
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+                await uploadTrack(file, null);
+            }
             e.target.value = '';
             renderCurrentView();
         });
 
-        // плеер
+        // Плеер
         document.getElementById('playPauseBtn').onclick = playPause;
         document.getElementById('nextBtn').onclick = nextTrack;
         document.getElementById('prevBtn').onclick = prevTrack;
