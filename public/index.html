@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>GoTify — музыкальное сообщество (фикс сохранения)</title>
+    <title>GoTify — общая музыка</title>
     <style>
         * {
             margin: 0;
@@ -348,13 +348,12 @@
             padding: 12px 24px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
             gap: 16px;
             flex-wrap: wrap;
         }
         .player-info { width: 220px; overflow: hidden; }
         .track-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .control-buttons { display: flex; gap: 16px; align-items: center; }
+        .control-buttons { display: flex; gap: 16px; align-items: center; margin-left: auto; }
         .ctrl-btn {
             background: none;
             border: none;
@@ -386,7 +385,7 @@
         .progress-area { display: flex; align-items: center; gap: 12px; flex: 2; min-width: 150px; }
         .progress-bar { flex: 1; height: 5px; background: rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer; }
         .progress-fill { width: 0%; height: 100%; background: var(--accent); border-radius: 10px; }
-        .volume-control { width: 120px; display: flex; gap: 8px; align-items: center; }
+        .volume-control { width: 120px; display: flex; gap: 8px; align-items: center; margin-left: auto; }
         .volume-slider { width: 80px; cursor: pointer; }
 
         .about-container { max-width: 700px; margin: 0 auto; text-align: center; background: rgba(0,0,0,0.3); border-radius: 48px; padding: 48px 32px; }
@@ -431,7 +430,7 @@
             </div>
         </div>
         <div class="content" id="contentArea">
-            <div id="dynamicContent">Загрузка...</div>
+            <div id="dynamicContent">Загрузка треков...</div>
         </div>
     </div>
     <div class="player-bar">
@@ -457,142 +456,86 @@
 </div>
 
 <script>
-    // ---------- НАДЁЖНАЯ РАБОТА С IndexedDB ----------
-    const DB_NAME = 'GoTifyV3';
-    const DB_VERSION = 1;
-    let db = null;
-    let globalTracks = [];
-    let playlists = [];
+    // --- API ВЫЗОВЫ К БЭКЕНДУ (server.js) ---
+    // Все запросы относительные, т.к. фронтенд и бэкенд на одном домене
+    async function apiFetchTracks() {
+        const res = await fetch('/api/tracks');
+        const data = await res.json();
+        return data.tracks || [];
+    }
+
+    async function apiUploadTrack(file, name, artist) {
+        const form = new FormData();
+        form.append('name', name);
+        form.append('artist', artist);
+        form.append('file', file);
+        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        const result = await res.json();
+        return result; // { success: true, track: {...} }
+    }
+
+    async function apiIncrementPlays(trackId) {
+        await fetch(`/api/play/${trackId}`, { method: 'POST' });
+    }
+
+    // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
+    let allTracks = [];          // общий список треков с сервера
     let audio = new Audio();
     let currentTrackId = null;
     let isPlaying = false;
+    let currentPlaylist = [];    // треки в текущем плейлисте (для навигации)
+    let currentIndex = -1;
 
-    // Открыть / инициализировать базу
-    function openDB() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-                db = request.result;
-                resolve(db);
-            };
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains('tracks')) {
-                    db.createObjectStore('tracks', { keyPath: 'id' });
-                }
-                if (!db.objectStoreNames.contains('playlists')) {
-                    db.createObjectStore('playlists', { keyPath: 'id' });
-                }
-            };
-        });
+    // --- ПЛЕЙЛИСТЫ (локальные, в localStorage) ---
+    let userPlaylists = [];      // { id, name, trackIds[] }
+    const STORAGE_PLAYLISTS = 'gotify_playlists';
+
+    function loadLocalPlaylists() {
+        const stored = localStorage.getItem(STORAGE_PLAYLISTS);
+        if (stored) userPlaylists = JSON.parse(stored);
+        else userPlaylists = [{ id: 'default_all', name: '📀 Все треки', trackIds: [] }];
+    }
+    function saveLocalPlaylists() {
+        localStorage.setItem(STORAGE_PLAYLISTS, JSON.stringify(userPlaylists));
     }
 
-    // Сохранить трек в БД (возвращает Promise)
-    function saveTrackToDB(track) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['tracks'], 'readwrite');
-            const store = transaction.objectStore('tracks');
-            const request = store.put(track); // put (добавляет или обновляет)
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    // Получить все треки из БД
-    function loadAllTracksFromDB() {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['tracks'], 'readonly');
-            const store = transaction.objectStore('tracks');
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    // Увеличить счётчик прослушиваний
-    async function incrementPlays(trackId) {
-        const track = globalTracks.find(t => t.id === trackId);
-        if (track) {
-            track.plays = (track.plays || 0) + 1;
-            await saveTrackToDB(track);
-            const updatedTracks = await loadAllTracksFromDB();
-            globalTracks = updatedTracks;
-            renderCurrentView(); // обновить UI
+    // --- ОБНОВЛЕНИЕ ГЛОБАЛЬНОГО СПИСКА ТРЕКОВ С СЕРВЕРА ---
+    async function refreshTracks() {
+        allTracks = await apiFetchTracks();
+        // Обновляем локальный плейлист "Все треки"
+        const defaultPlaylist = userPlaylists.find(p => p.id === 'default_all');
+        if (defaultPlaylist) {
+            defaultPlaylist.trackIds = allTracks.map(t => t.id);
+            saveLocalPlaylists();
         }
+        renderCurrentView(); // перерисовываем текущий экран
     }
 
-    // Загрузить файл и сохранить в БД
-    async function uploadTrack(file, customArtist = null) {
-        return new Promise(async (resolve, reject) => {
-            const fileName = file.name.replace(/\.[^/.]+$/, '');
-            const artist = customArtist || prompt("Исполнитель:", "Неизвестный") || "Неизвестный";
-            const id = Date.now() + '-' + Math.random().toString(36).substring(2, 10);
-
-            try {
-                // Читаем файл как ArrayBuffer для надёжного хранения в IndexedDB
-                const arrayBuffer = await file.arrayBuffer();
-                const track = {
-                    id: id,
-                    name: fileName,
-                    artist: artist,
-                    plays: 0,
-                    data: arrayBuffer,
-                    type: file.type,
-                    date: Date.now()
-                };
-                await saveTrackToDB(track);
-                // Обновить глобальный список
-                globalTracks = await loadAllTracksFromDB();
-                // Для удобства сохраним плейлисты (если нужно)
-                if (playlists.length === 0) {
-                    playlists = [{ id: 'default_all', name: '📀 Все треки', trackIds: [] }];
-                }
-                const allPlaylist = playlists.find(p => p.id === 'default_all');
-                if (allPlaylist && !allPlaylist.trackIds.includes(id)) {
-                    allPlaylist.trackIds.push(id);
-                    // Сохранить плейлисты в отдельном store
-                    const transaction = db.transaction(['playlists'], 'readwrite');
-                    const store = transaction.objectStore('playlists');
-                    await store.put(allPlaylist);
-                }
-                resolve();
-            } catch (err) {
-                console.error(err);
-                reject(err);
-            }
-        });
-    }
-
-    // Воспроизведение
-    function playTrack(trackId) {
-        const track = globalTracks.find(t => t.id === trackId);
-        if (!track || !track.data) {
-            alert("Трек недоступен");
-            return;
-        }
-        const blob = new Blob([track.data], { type: track.type || 'audio/mpeg' });
-        const url = URL.createObjectURL(blob);
-        if (currentTrackId === trackId && audio.src === url) {
+    // --- ВОСПРОИЗВЕДЕНИЕ ТРЕКА ---
+    function playTrackById(trackId) {
+        const track = allTracks.find(t => t.id === trackId);
+        if (!track) return;
+        if (currentTrackId === trackId && audio.src === track.url) {
             audio.play();
             isPlaying = true;
             document.getElementById('playPauseBtn').innerHTML = '⏸';
             return;
         }
-        audio.src = url;
+        audio.src = track.url;
         audio.load();
-        audio.play().catch(e => console.warn(e));
+        audio.play().catch(e => console.warn);
         isPlaying = true;
         document.getElementById('playPauseBtn').innerHTML = '⏸';
-        document.getElementById('currentTrackName').innerText = `${track.name} · ${track.artist}`;
+        document.getElementById('currentTrackName').innerHTML = `${escapeHtml(track.name)} · ${escapeHtml(track.artist)}`;
         document.getElementById('currentPlaylistName').innerText = 'сообщество';
-        currentTrackId = trackId;
-        incrementPlays(trackId);
+        currentTrackId = track.id;
+        // Увеличиваем счётчик прослушиваний на сервере
+        apiIncrementPlays(track.id).then(() => refreshTracks()); // обновляем список, чтобы обновился счётчик
     }
 
-    // ---------- UI ----------
+    // --- ОТРИСОВКА UI (Главная, Поиск, Библиотека, Темы, About) ---
     function renderHome() {
-        const sorted = [...globalTracks].sort((a,b) => (b.plays||0) - (a.plays||0));
+        const sorted = [...allTracks].sort((a,b) => (b.plays||0) - (a.plays||0));
         const container = document.getElementById('dynamicContent');
         if (!sorted.length) {
             container.innerHTML = `
@@ -614,14 +557,8 @@
         attachCardEvents();
     }
 
-    function attachCardEvents() {
-        document.querySelectorAll('.track-card').forEach(card => {
-            card.addEventListener('click', () => playTrack(card.dataset.id));
-        });
-    }
-
     function renderSearch() {
-        const topTracks = [...globalTracks].sort((a,b)=> (b.plays||0)-(a.plays||0)).slice(0,12);
+        const topTracks = [...allTracks].sort((a,b)=> (b.plays||0)-(a.plays||0)).slice(0,12);
         const container = document.getElementById('dynamicContent');
         container.innerHTML = `
             <div class="search-container">
@@ -642,7 +579,7 @@
         const searchInput = document.getElementById('searchInputGlobal');
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase();
-            const filtered = globalTracks.filter(t => t.name.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query));
+            const filtered = allTracks.filter(t => t.name.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query));
             const resultsDiv = document.getElementById('searchResultsArea');
             if (!filtered.length) {
                 resultsDiv.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">😔 Не удалось найти «${escapeHtml(query)}».<br><div class="upload-helper" id="searchUploadBtn">📀 Загрузить</div></div>`;
@@ -660,13 +597,14 @@
     }
 
     function renderLibrary() {
+        // Показываем все треки (библиотека = все общие треки)
         const container = document.getElementById('dynamicContent');
-        if (globalTracks.length === 0) {
-            container.innerHTML = `<div class="empty-state">📂 Нет треков. Загрузите музыку.</div>`;
+        if (allTracks.length === 0) {
+            container.innerHTML = `<div class="empty-state">📂 Нет треков. Загрузите музыку первым!</div>`;
             return;
         }
-        container.innerHTML = `<div class="greeting">📀 Моя библиотека</div>
-            <div class="tracks-grid">${globalTracks.map(t => `
+        container.innerHTML = `<div class="greeting">📀 Все треки сообщества</div>
+            <div class="tracks-grid">${allTracks.map(t => `
                 <div class="track-card" data-id="${t.id}">
                     <div class="track-cover">💿</div>
                     <div class="track-name">${escapeHtml(t.name)}</div>
@@ -708,7 +646,7 @@
                     <a href="https://www.donationalerts.com/r/XDstrogo" target="_blank" class="social-btn">❤️ Помочь сайту</a>
                 </div>
                 <p>Вопросы, идеи: <strong>@chesteryosha</strong> (Discord)</p>
-                <p style="margin-top: 20px; font-size:13px;">Музыкальное сообщество, где каждый трек находит своих слушателей.</p>
+                <p style="margin-top: 20px; font-size:13px;">Теперь треки хранятся на сервере и доступны всем!</p>
             </div>
         `;
     }
@@ -723,69 +661,65 @@
         else renderHome();
     }
 
+    function attachCardEvents() {
+        document.querySelectorAll('.track-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const id = card.dataset.id;
+                if (id) playTrackById(id);
+            });
+        });
+    }
+
+    // --- ЗАГРУЗКА ТРЕКА (обработчик)---
+    async function handleUpload(file) {
+        const fileName = file.name.replace(/\.[^/.]+$/, '');
+        const artist = prompt("Исполнитель:", "Неизвестный") || "Неизвестный";
+        if (!artist) return;
+        const result = await apiUploadTrack(file, fileName, artist);
+        if (result.success) {
+            alert("Трек загружен! Обновляем список...");
+            await refreshTracks();
+        } else {
+            alert("Ошибка загрузки: " + (result.error || "неизвестная"));
+        }
+    }
+
+    // --- ПЛЕЕР УПРАВЛЕНИЕ ---
     function playPause() {
         if (audio.paused) { audio.play(); isPlaying = true; document.getElementById('playPauseBtn').innerHTML = '⏸'; }
         else { audio.pause(); isPlaying = false; document.getElementById('playPauseBtn').innerHTML = '▶'; }
     }
-
     function nextTrack() {
-        if (currentTrackId && globalTracks.length > 0) {
-            const idx = globalTracks.findIndex(t => t.id === currentTrackId);
-            const nextIdx = (idx + 1) % globalTracks.length;
-            playTrack(globalTracks[nextIdx].id);
-        } else if (globalTracks.length) {
-            playTrack(globalTracks[0].id);
-        }
+        if (allTracks.length === 0) return;
+        let idx = allTracks.findIndex(t => t.id === currentTrackId);
+        if (idx === -1) idx = 0;
+        else idx = (idx + 1) % allTracks.length;
+        playTrackById(allTracks[idx].id);
     }
-
     function prevTrack() {
-        if (currentTrackId && globalTracks.length > 0) {
-            const idx = globalTracks.findIndex(t => t.id === currentTrackId);
-            const prevIdx = (idx - 1 + globalTracks.length) % globalTracks.length;
-            playTrack(globalTracks[prevIdx].id);
-        } else if (globalTracks.length) {
-            playTrack(globalTracks[0].id);
-        }
+        if (allTracks.length === 0) return;
+        let idx = allTracks.findIndex(t => t.id === currentTrackId);
+        if (idx === -1) idx = 0;
+        else idx = (idx - 1 + allTracks.length) % allTracks.length;
+        playTrackById(allTracks[idx].id);
     }
 
-    // --- Инициализация ---
+    // --- ИНИЦИАЛИЗАЦИЯ ---
     document.addEventListener('DOMContentLoaded', async () => {
+        // Загружаем тему
         const savedTheme = localStorage.getItem('gotify_theme') || 'emerald';
         document.body.className = `theme-${savedTheme}`;
-
-        // Открываем БД и загружаем треки
-        try {
-            await openDB();
-            globalTracks = await loadAllTracksFromDB();
-            // Загружаем плейлисты (просто для единообразия)
-            const trans = db.transaction(['playlists'], 'readonly');
-            const store = trans.objectStore('playlists');
-            const plRequest = store.getAll();
-            plRequest.onsuccess = () => {
-                const storedPlaylists = plRequest.result;
-                if (storedPlaylists.length === 0) {
-                    playlists = [{ id: 'default_all', name: '📀 Все треки', trackIds: globalTracks.map(t => t.id) }];
-                    const addTrans = db.transaction(['playlists'], 'readwrite');
-                    const addStore = addTrans.objectStore('playlists');
-                    addStore.put(playlists[0]);
-                } else {
-                    playlists = storedPlaylists;
-                }
-            };
-        } catch(e) {
-            console.error(e);
-            document.getElementById('dynamicContent').innerHTML = '<div class="empty-state">Ошибка загрузки базы данных</div>';
-        }
-
-        // Рендер
-        renderCurrentView();
+        // Загружаем локальные плейлисты
+        loadLocalPlaylists();
+        // Загружаем треки с сервера
+        await refreshTracks();
 
         // Мобильное меню
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         const menuBtn = document.getElementById('mobileMenuBtn');
-        function closeMenu() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
-        function openMenu() { sidebar.classList.add('open'); overlay.classList.add('open'); }
+        const closeMenu = () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); };
+        const openMenu = () => { sidebar.classList.add('open'); overlay.classList.add('open'); };
         menuBtn.addEventListener('click', openMenu);
         overlay.addEventListener('click', closeMenu);
         document.querySelectorAll('.nav-item').forEach(btn => {
@@ -797,15 +731,12 @@
             });
         });
 
-        // Загрузка файлов
+        // Кнопка загрузки
         document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('uploadInput').click());
         document.getElementById('uploadInput').addEventListener('change', async (e) => {
             const files = Array.from(e.target.files);
-            for (const file of files) {
-                await uploadTrack(file, null);
-            }
+            for (const file of files) await handleUpload(file);
             e.target.value = '';
-            renderCurrentView();
         });
 
         // Плеер
